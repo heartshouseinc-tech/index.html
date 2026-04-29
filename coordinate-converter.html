@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>座標変換システム CoordEx</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600;700;900&family=Noto+Sans+JP:wght@400;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --sky:#e8f4fd; --white:#fff; --blue:#1a6fd4; --blue-dk:#0f4fa0;
+  --teal:#0891b2; --green:#059669; --orange:#ea580c; --red:#dc2626;
+  --purple:#7c3aed;
+  --text:#0f172a; --text2:#334155; --text3:#64748b;
+  --border:#cbd5e1; --bl:#e2e8f0;
+  --shadow:0 2px 12px rgba(15,82,204,.10);
+  --shadow-lg:0 8px 32px rgba(15,82,204,.14);
+  --r:16px; --rs:10px;
+  --mono:'JetBrains Mono',monospace;
+  --sans:'Lexend','Noto Sans JP',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html{scroll-behavior:smooth;}
+body{background:linear-gradient(160deg,#dbeafe 0%,#e0f2fe 40%,#f0fdf4 100%);
+  color:var(--text);font-family:var(--sans);min-height:100vh;font-size:16px;}
+.wrap{max-width:860px;margin:0 auto;padding:14px 12px 48px;}
+
+/* Header */
+header{background:var(--white);border-radius:20px;padding:20px;margin-bottom:14px;
+  box-shadow:var(--shadow-lg);border:1px solid rgba(255,255,255,.8);
+  display:flex;align-items:center;gap:14px;}
+.h-icon{width:50px;height:50px;background:linear-gradient(135deg,var(--blue),var(--teal));
+  border-radius:14px;display:flex;align-items:center;justify-content:center;
+  font-size:24px;flex-shrink:0;box-shadow:0 4px 16px rgba(26,111,212,.3);}
+.h-title{font-size:21px;font-weight:900;letter-spacing:-.5px;line-height:1.2;}
+.h-sub{font-size:11px;color:var(--text3);margin-top:3px;font-weight:400;}
+
+/* Card */
+.card{background:var(--white);border-radius:var(--r);padding:18px;
+  margin-bottom:14px;box-shadow:var(--shadow);border:1px solid var(--bl);}
+.card-ttl{font-size:13px;font-weight:700;color:var(--blue);letter-spacing:.5px;
+  margin-bottom:14px;display:flex;align-items:center;gap:7px;}
+
+/* Input */
+.inp-row{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+.fld{flex:1;min-width:120px;}
+.fld label{display:block;font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px;}
+input[type=text]{width:100%;background:var(--sky);border:2px solid var(--bl);
+  border-radius:var(--rs);padding:13px 15px;font-family:var(--sans);font-size:16px;
+  color:var(--text);outline:none;transition:.2s;-webkit-appearance:none;}
+input[type=text]:focus{border-color:var(--blue);background:var(--white);
+  box-shadow:0 0 0 4px rgba(26,111,212,.12);}
+input[type=text]::placeholder{color:var(--text3);}
+
+/* Buttons */
+.btn-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media(max-width:400px){.btn-row{grid-template-columns:1fr;}}
+.btn{padding:15px 10px;border:none;border-radius:var(--rs);font-family:var(--sans);
+  font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;
+  justify-content:center;gap:8px;transition:transform .12s,opacity .2s;
+  touch-action:manipulation;letter-spacing:.2px;}
+.btn:active{transform:scale(.97);}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+.btn-search{background:linear-gradient(135deg,var(--blue),var(--blue-dk));color:#fff;
+  box-shadow:0 4px 16px rgba(26,111,212,.35);}
+.btn-gps{background:linear-gradient(135deg,var(--green),#047857);color:#fff;
+  box-shadow:0 4px 16px rgba(5,150,105,.35);}
+.btn-gps.on{background:linear-gradient(135deg,var(--orange),#c2410c);
+  box-shadow:0 4px 16px rgba(234,88,12,.35);}
+
+/* Status */
+#status{display:none;padding:13px 16px;border-radius:var(--rs);font-size:14px;
+  font-weight:600;margin-bottom:14px;align-items:center;gap:10px;}
+#status.loading{display:flex;background:#eff6ff;color:var(--blue);border:2px solid #bfdbfe;}
+#status.error{display:flex;background:#fef2f2;color:var(--red);border:2px solid #fecaca;}
+.spin{width:17px;height:17px;border:3px solid currentColor;border-right-color:transparent;
+  border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* Location banner */
+#locBanner{display:none;background:var(--white);border-radius:var(--rs);
+  padding:12px 16px;margin-bottom:14px;border:2px solid #bfdbfe;box-shadow:var(--shadow);}
+.loc-lbl{font-size:10px;font-weight:700;color:var(--blue);letter-spacing:1px;margin-bottom:3px;}
+.loc-nm{font-size:14px;color:var(--text2);font-weight:600;line-height:1.4;}
+
+/* Section head */
+.sec-h{font-size:13px;font-weight:700;color:var(--text2);letter-spacing:.5px;
+  margin:20px 0 12px;display:flex;align-items:center;gap:8px;}
+.sec-h::after{content:'';flex:1;height:2px;background:var(--bl);border-radius:2px;}
+.sync-dot-wrap{display:inline-flex;align-items:center;gap:5px;background:#dcfce7;
+  color:#065f46;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;margin-left:8px;}
+.sdot{width:7px;height:7px;background:var(--green);border-radius:50%;
+  animation:blink 1.5s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Coord card */
+.ccard{background:var(--white);border-radius:var(--r);margin-bottom:14px;
+  box-shadow:var(--shadow);border:1px solid var(--bl);overflow:hidden;}
+.cc-head{display:flex;align-items:flex-start;justify-content:space-between;
+  padding:16px 16px 0;gap:10px;}
+.cc-cat{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;}
+.cc-name{font-size:17px;font-weight:700;color:var(--text);line-height:1.3;}
+.badge{display:inline-flex;align-items:center;font-size:11px;font-weight:700;
+  padding:4px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0;}
+.b-blue{background:#dbeafe;color:var(--blue-dk);}
+.b-green{background:#dcfce7;color:#065f46;}
+.b-orange{background:#ffedd5;color:#7c2d12;}
+.b-teal{background:#cffafe;color:#164e63;}
+.b-purple{background:#ede9fe;color:#4c1d95;}
+
+.cc-val-wrap{padding:12px 16px;cursor:pointer;user-select:all;-webkit-user-select:all;}
+.cc-val{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text);
+  line-height:1.9;white-space:pre-wrap;word-break:break-all;
+  background:var(--sky);padding:12px 13px;border-radius:var(--rs);
+  border:1px solid var(--bl);transition:background .15s;}
+.cc-val:active{background:#dbeafe;}
+@media(max-width:380px){.cc-val{font-size:12px;}}
+
+.cc-foot{display:flex;align-items:center;justify-content:space-between;padding:0 16px 14px;}
+.cc-hint{font-size:11px;color:var(--text3);}
+.cpbtn{background:var(--sky);border:1px solid var(--border);border-radius:8px;
+  padding:7px 14px;font-size:12px;font-weight:700;color:var(--blue);cursor:pointer;
+  font-family:var(--sans);transition:.15s;}
+.cpbtn:active{background:#dbeafe;}
+.cpbtn.ok{background:#dcfce7;color:var(--green);border-color:#86efac;}
+
+/* MGRS rows */
+.mgrs-rows{display:grid;gap:8px;padding:12px 16px;}
+.mgrs-row{display:flex;align-items:center;gap:10px;background:var(--sky);
+  border:1px solid var(--bl);border-radius:var(--rs);padding:10px 13px;cursor:pointer;
+  transition:background .15s;}
+.mgrs-row:active{background:#dbeafe;}
+.mgrs-prec{font-size:11px;font-weight:700;color:var(--text3);min-width:64px;flex-shrink:0;}
+.mgrs-v{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text);
+  flex:1;word-break:break-all;}
+.mgrs-cp{font-size:11px;color:var(--blue);font-weight:700;flex-shrink:0;}
+
+/* Map tabs */
+.map-tabs{display:flex;background:var(--sky);border-top:1px solid var(--bl);
+  overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.map-tabs::-webkit-scrollbar{display:none;}
+.mtab{padding:10px 15px;font-size:12px;font-weight:700;color:var(--text3);
+  white-space:nowrap;cursor:pointer;border-bottom:3px solid transparent;
+  background:none;border-top:none;border-left:none;border-right:none;
+  font-family:var(--sans);touch-action:manipulation;transition:.15s;}
+.mtab.act{color:var(--blue);border-bottom-color:var(--blue);background:var(--white);}
+
+/* Map frames */
+.map-box{position:relative;}
+.mlmap{width:100%;height:270px;display:none;}
+.mlmap.act{display:block;}
+.mif{width:100%;height:270px;border:none;display:none;}
+.mif.act{display:block;}
+@media(min-width:600px){.mlmap,.mif{height:310px;}}
+
+/* 2-col grid */
+.g2{display:grid;gap:14px;margin-bottom:14px;}
+@media(min-width:600px){.g2{grid-template-columns:1fr 1fr;}}
+.g2 .ccard{margin-bottom:0;}
+
+/* FAB */
+.fab{position:fixed;bottom:22px;right:18px;width:50px;height:50px;
+  background:var(--blue);border-radius:50%;border:none;color:#fff;font-size:20px;
+  cursor:pointer;box-shadow:0 4px 18px rgba(26,111,212,.4);display:none;
+  align-items:center;justify-content:center;z-index:999;touch-action:manipulation;}
+.fab:active{transform:scale(.93);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- Header -->
+<header>
+  <div class="h-icon">🌐</div>
+  <div>
+    <div class="h-title">座標変換システム</div>
+    <div class="h-sub">住所・郵便番号・GPS → 全規格座標 ＋ 地図同期連動</div>
+  </div>
+</header>
+
+<!-- Input -->
+<div class="card">
+  <div class="card-ttl">🔍 住所・郵便番号で検索</div>
+  <div class="inp-row">
+    <div class="fld" style="flex:0 0 130px">
+      <label>📮 郵便番号</label>
+      <input type="text" id="iPost" placeholder="123-4567" maxlength="8" inputmode="numeric">
+    </div>
+    <div class="fld">
+      <label>📍 住所（番地まで可）</label>
+      <input type="text" id="iAddr" placeholder="東京都千代田区千代田1-1">
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-search" id="btnS" onclick="doSearch()">
+      🔍 住所で座標変換
+    </button>
+    <button class="btn btn-gps" id="btnG" onclick="doGPS()">
+      📡 <span id="gpsLbl">現在地GPS取得</span>
+    </button>
+  </div>
+</div>
+
+<!-- Status -->
+<div id="status"><div class="spin"></div><span id="stMsg">処理中...</span></div>
+
+<!-- Location -->
+<div id="locBanner">
+  <div class="loc-lbl">📍 取得した位置</div>
+  <div class="loc-nm" id="locNm">—</div>
+</div>
+
+<!-- Results -->
+<div id="results" style="display:none">
+
+  <div class="sec-h">
+    📡 変換結果
+    <span class="sync-dot-wrap"><span class="sdot"></span>全地図同期中</span>
+  </div>
+
+  <!-- DD + DMS -->
+  <div class="g2">
+
+    <!-- Decimal Degrees -->
+    <div class="ccard">
+      <div class="cc-head">
+        <div><div class="cc-cat" style="color:var(--blue)">GPS / Google Maps</div>
+          <div class="cc-name">十進度数 (DD)</div></div>
+        <span class="badge b-blue">WGS84</span>
+      </div>
+      <div class="cc-val-wrap"><div class="cc-val" id="vDD">—</div></div>
+      <div class="cc-foot"><span class="cc-hint">📋 タップでコピー</span>
+        <button class="cpbtn" onclick="cp('vDD',this)">コピー</button></div>
+      <div class="map-tabs">
+        <button class="mtab act" onclick="sw(this,'dd','lf')">Leaflet</button>
+        <button class="mtab" onclick="sw(this,'dd','gm')">Google Maps</button>
+        <button class="mtab" onclick="sw(this,'dd','os')">OpenStreetMap</button>
+        <button class="mtab" onclick="sw(this,'dd','gs')">地理院地図</button>
+      </div>
+      <div class="map-box">
+        <div id="lf-dd" class="mlmap act"></div>
+        <iframe id="if-dd-gm" class="mif" src="about:blank" allowfullscreen></iframe>
+        <iframe id="if-dd-os" class="mif" src="about:blank"></iframe>
+        <iframe id="if-dd-gs" class="mif" src="about:blank"></iframe>
+      </div>
+    </div>
+
+    <!-- DMS -->
+    <div class="ccard">
+      <div class="cc-head">
+        <div><div class="cc-cat" style="color:var(--teal)">航空 / 航海 / 地形図</div>
+          <div class="cc-name">度分秒 (DMS)</div></div>
+        <span class="badge b-teal">NAV</span>
+      </div>
+      <div class="cc-val-wrap"><div class="cc-val" id="vDMS">—</div></div>
+      <div class="cc-foot"><span class="cc-hint">📋 タップでコピー</span>
+        <button class="cpbtn" onclick="cp('vDMS',this)">コピー</button></div>
+      <div class="map-tabs">
+        <button class="mtab act" onclick="sw(this,'dms','lf')">地理院(地形)</button>
+        <button class="mtab" onclick="sw(this,'dms','gs')">地理院地図</button>
+        <button class="mtab" onclick="sw(this,'dms','os')">OpenStreetMap</button>
+      </div>
+      <div class="map-box">
+        <div id="lf-dms" class="mlmap act"></div>
+        <iframe id="if-dms-gs" class="mif" src="about:blank"></iframe>
+        <iframe id="if-dms-os" class="mif" src="about:blank"></iframe>
+      </div>
+    </div>
+
+  </div><!-- /g2 -->
+
+  <!-- DDM -->
+  <div class="ccard">
+    <div class="cc-head">
+      <div><div class="cc-cat" style="color:var(--teal)">海図 / チャート / 航法</div>
+        <div class="cc-name">度・十進分 (DDM)</div></div>
+      <span class="badge b-teal">DDM</span>
+    </div>
+    <div class="cc-val-wrap"><div class="cc-val" id="vDDM">—</div></div>
+    <div class="cc-foot"><span class="cc-hint">📋 タップでコピー</span>
+      <button class="cpbtn" onclick="cp('vDDM',this)">コピー</button></div>
+    <div class="map-tabs">
+      <button class="mtab act" onclick="sw(this,'ddm','lf')">衛星画像</button>
+      <button class="mtab" onclick="sw(this,'ddm','os')">OpenStreetMap</button>
+      <button class="mtab" onclick="sw(this,'ddm','gs')">地理院地図</button>
+    </div>
+    <div class="map-box">
+      <div id="lf-ddm" class="mlmap act"></div>
+      <iframe id="if-ddm-os" class="mif" src="about:blank"></iframe>
+      <iframe id="if-ddm-gs" class="mif" src="about:blank"></iframe>
+    </div>
+  </div>
+
+  <!-- UTM -->
+  <div class="ccard">
+    <div class="cc-head">
+      <div><div class="cc-cat" style="color:var(--green)">測量 / 国際軍事標準</div>
+        <div class="cc-name">UTM座標</div></div>
+      <span class="badge b-green">UTM</span>
+    </div>
+    <div class="cc-val-wrap"><div class="cc-val" id="vUTM">—</div></div>
+    <div class="cc-foot"><span class="cc-hint">📋 タップでコピー</span>
+      <button class="cpbtn" onclick="cp('vUTM',this)">コピー</button></div>
+    <div class="map-tabs">
+      <button class="mtab act" onclick="sw(this,'utm','lf')">Leaflet</button>
+      <button class="mtab" onclick="sw(this,'utm','os')">OpenStreetMap</button>
+      <button class="mtab" onclick="sw(this,'utm','gs')">地理院地図</button>
+    </div>
+    <div class="map-box">
+      <div id="lf-utm" class="mlmap act"></div>
+      <iframe id="if-utm-os" class="mif" src="about:blank"></iframe>
+      <iframe id="if-utm-gs" class="mif" src="about:blank"></iframe>
+    </div>
+  </div>
+
+  <!-- MGRS -->
+  <div class="ccard">
+    <div class="cc-head">
+      <div><div class="cc-cat" style="color:var(--orange)">🔴 自衛隊 / NATO 軍用座標</div>
+        <div class="cc-name">MGRS（軍用格子参照）</div></div>
+      <span class="badge b-orange">自衛隊/NATO</span>
+    </div>
+    <div class="mgrs-rows" id="mgrsRows"></div>
+    <div class="map-tabs">
+      <button class="mtab act" onclick="sw(this,'mgrs','lf')">地理院(地形)</button>
+      <button class="mtab" onclick="sw(this,'mgrs','os')">OpenStreetMap</button>
+      <button class="mtab" onclick="sw(this,'mgrs','gs')">地理院地図</button>
+      <button class="mtab" onclick="sw(this,'mgrs','gm')">Google Maps</button>
+    </div>
+    <div class="map-box">
+      <div id="lf-mgrs" class="mlmap act"></div>
+      <iframe id="if-mgrs-os" class="mif" src="about:blank"></iframe>
+      <iframe id="if-mgrs-gs" class="mif" src="about:blank"></iframe>
+      <iframe id="if-mgrs-gm" class="mif" src="about:blank" allowfullscreen></iframe>
+    </div>
+  </div>
+
+  <!-- JP Rect -->
+  <div class="ccard">
+    <div class="cc-head">
+      <div><div class="cc-cat" style="color:var(--green)">国土地理院 / 測量 / 建設</div>
+        <div class="cc-name">平面直角座標系（全19系自動選択）</div></div>
+      <span class="badge b-green">国土地理院</span>
+    </div>
+    <div class="cc-val-wrap"><div class="cc-val" id="vJPR">—</div></div>
+    <div class="cc-foot"><span class="cc-hint">📋 タップでコピー</span>
+      <button class="cpbtn" onclick="cp('vJPR',this)">コピー</button></div>
+    <div class="map-tabs">
+      <button class="mtab act" onclick="sw(this,'jpr','lf')">地理院(地形)</button>
+      <button class="mtab" onclick="sw(this,'jpr','gs')">地理院地図</button>
+      <button class="mtab" onclick="sw(this,'jpr','os')">OpenStreetMap</button>
+    </div>
+    <div class="map-box">
+      <div id="lf-jpr" class="mlmap act"></div>
+      <iframe id="if-jpr-gs" class="mif" src="about:blank"></iframe>
+      <iframe id="if-jpr-os" class="mif" src="about:blank"></iframe>
+    </div>
+  </div>
+
+  <!-- ECEF + Plus Code -->
+  <div class="g2">
+
+    <div class="ccard">
+      <div class="cc-head">
+        <div><div class="cc-cat" style="color:var(--purple)">宇宙測地 / 衛星</div>
+          <div class="cc-name">ECEF地心直交</div></div>
+        <span class="badge b-purple">XYZ</span>
+      </div>
+      <div class="cc-val-wrap"><div class="cc-val" id="vECEF">—</div></div>
+      <div class="cc-foot"><span class="cc-hint">📋 タップでコピー</span>
+        <button class="cpbtn" onclick="cp('vECEF',this)">コピー</button></div>
+      <div class="map-tabs">
+        <button class="mtab act" onclick="sw(this,'ecef','lf')">衛星画像</button>
+        <button class="mtab" onclick="sw(this,'ecef','os')">OpenStreetMap</button>
+      </div>
+      <div class="map-box">
+        <div id="lf-ecef" class="mlmap act"></div>
+        <iframe id="if-ecef-os" class="mif" src="about:blank"></iframe>
+      </div>
+    </div>
+
+    <div class="ccard">
+      <div class="cc-head">
+        <div><div class="cc-cat" style="color:var(--blue)">Google / OLC</div>
+          <div class="cc-name">Plus Code</div></div>
+        <span class="badge b-blue">OLC</span>
+      </div>
+      <div class="cc-val-wrap"><div class="cc-val" id="vPLUS">—</div></div>
+      <div class="cc-foot"><span class="cc-hint">📋 タップでコピー</span>
+        <button class="cpbtn" onclick="cp('vPLUS',this)">コピー</button></div>
+      <div class="map-tabs">
+        <button class="mtab act" onclick="sw(this,'plus','lf')">Leaflet</button>
+        <button class="mtab" onclick="sw(this,'plus','gm')">Google Maps</button>
+      </div>
+      <div class="map-box">
+        <div id="lf-plus" class="mlmap act"></div>
+        <iframe id="if-plus-gm" class="mif" src="about:blank" allowfullscreen></iframe>
+      </div>
+    </div>
+
+  </div><!-- /g2 -->
+
+  <!-- Geohash -->
+  <div class="ccard">
+    <div class="cc-head">
+      <div><div class="cc-cat" style="color:var(--teal)">Web地図 / API</div>
+        <div class="cc-name">Geohash</div></div>
+      <span class="badge b-teal">GeoHash</span>
+    </div>
+    <div class="cc-val-wrap"><div class="cc-val" id="vGEO">—</div></div>
+    <div class="cc-foot"><span class="cc-hint">📋 タップでコピー</span>
+      <button class="cpbtn" onclick="cp('vGEO',this)">コピー</button></div>
+    <div class="map-tabs">
+      <button class="mtab act" onclick="sw(this,'geo','lf')">Leaflet</button>
+      <button class="mtab" onclick="sw(this,'geo','os')">OpenStreetMap</button>
+      <button class="mtab" onclick="sw(this,'geo','gs')">地理院地図</button>
+    </div>
+    <div class="map-box">
+      <div id="lf-geo" class="mlmap act"></div>
+      <iframe id="if-geo-os" class="mif" src="about:blank"></iframe>
+      <iframe id="if-geo-gs" class="mif" src="about:blank"></iframe>
+    </div>
+  </div>
+
+</div><!-- /results -->
+</div><!-- /wrap -->
+
+<button class="fab" id="fab" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+// ──────────────────────────────────────────────
+//  定数 & 楕円体
+// ──────────────────────────────────────────────
+const D2R=Math.PI/180, R2D=180/Math.PI;
+const WGS84={a:6378137,f:1/298.257223563};
+WGS84.e2=2*WGS84.f-WGS84.f**2;
+const GRS80={a:6378137,f:1/298.257222101};
+GRS80.e2=2*GRS80.f-GRS80.f**2;
+
+// ──────────────────────────────────────────────
+//  変換関数
+// ──────────────────────────────────────────────
+const toDMS=(d,isLat)=>{
+  const dir=isLat?(d>=0?'N':'S'):(d>=0?'E':'W'),a=Math.abs(d);
+  const dd=Math.floor(a),m=Math.floor((a-dd)*60),s=((a-dd)*60-m)*60;
+  return `${dir} ${dd}° ${m}' ${s.toFixed(4)}"`;
+};
+const toDDM=(d,isLat)=>{
+  const dir=isLat?(d>=0?'N':'S'):(d>=0?'E':'W'),a=Math.abs(d);
+  const dd=Math.floor(a),m=((a-dd)*60).toFixed(6);
+  return `${dir} ${dd}° ${m}'`;
+};
+const toECEF=(lat,lon,h=0)=>{
+  const p=lat*D2R,l=lon*D2R;
+  const N=WGS84.a/Math.sqrt(1-WGS84.e2*Math.sin(p)**2);
+  return{X:(N+h)*Math.cos(p)*Math.cos(l),Y:(N+h)*Math.cos(p)*Math.sin(l),Z:(N*(1-WGS84.e2)+h)*Math.sin(p)};
+};
+const latBand=lat=>'CDEFGHJKLMNPQRSTUVWX'[Math.max(0,Math.min(19,Math.floor((lat+80)/8)))]||'N';
+function toUTM(lat,lon){
+  const z=Math.floor((lon+180)/6)+1,l0=(z-1)*6-177;
+  const k=.9996,{a,e2}=WGS84,ep2=e2/(1-e2);
+  const p=lat*D2R,lm=(lon-l0)*D2R;
+  const N=a/Math.sqrt(1-e2*Math.sin(p)**2);
+  const T=Math.tan(p)**2,C=ep2*Math.cos(p)**2,A=Math.cos(p)*lm;
+  const M=a*((1-e2/4-3*e2**2/64-5*e2**3/256)*p
+    -(3*e2/8+3*e2**2/32+45*e2**3/1024)*Math.sin(2*p)
+    +(15*e2**2/256+45*e2**3/1024)*Math.sin(4*p)
+    -35*e2**3/3072*Math.sin(6*p));
+  const x=k*N*(A+(1-T+C)*A**3/6+(5-18*T+T**2+72*C-58*ep2)*A**5/120)+5e5;
+  let y=k*(M+N*Math.tan(p)*(A**2/2+(5-T+9*C+4*C**2)*A**4/24+(61-58*T+T**2+600*C-330*ep2)*A**6/720));
+  if(lat<0)y+=1e7;
+  return{z,b:latBand(lat),x:Math.round(x),y:Math.round(y)};
+}
+function toMGRS(lat,lon,pr=5){
+  const {z,b,x,y}=toUTM(lat,lon);
+  const cols=['ABCDEFGH','JKLMNPQR','STUVWXYZ'];
+  const rows=['ABCDEFGHJKLMNPQRSTUV','FGHJKLMNPQRSTUVABCDE'];
+  const cL=cols[(z-1)%3][Math.floor(x/1e5)-1]||'A';
+  const rL=rows[z%2][Math.floor((y%2e6)/1e5)%20];
+  const dv=10**(5-pr);
+  return `${z}${b} ${cL}${rL} ${String(Math.floor((x%1e5)/dv)).padStart(pr,'0')} ${String(Math.floor((y%1e5)/dv)).padStart(pr,'0')}`;
+}
+const JP=[
+  {n:1,lo:129.5,la:33},{n:2,lo:131,la:33},{n:3,lo:132+10/60,la:36},
+  {n:4,lo:133.5,la:33},{n:5,lo:134+20/60,la:36},{n:6,lo:136,la:36},
+  {n:7,lo:137+10/60,la:36},{n:8,lo:138.5,la:36},{n:9,lo:139+50/60,la:36},
+  {n:10,lo:140+50/60,la:40},{n:11,lo:140.25,la:44},{n:12,lo:142.25,la:44},
+  {n:13,lo:144.25,la:44},{n:14,lo:142,la:26},{n:15,lo:127.5,la:26},
+  {n:16,lo:124,la:26},{n:17,lo:131,la:26},{n:18,lo:136,la:20},{n:19,lo:154,la:26}
+];
+function toJPR(lat,lon){
+  const s=JP.reduce((b,c)=>((lat-c.la)**2+(lon-c.lo)**2)<((lat-b.la)**2+(lon-b.lo)**2)?c:b);
+  const{a,e2}=GRS80,m=.9999,p=lat*D2R,l=(lon-s.lo)*D2R,p0=s.la*D2R;
+  const Mf=q=>a*((1-e2/4-3*e2**2/64-5*e2**3/256)*q
+    -(3*e2/8+3*e2**2/32+45*e2**3/1024)*Math.sin(2*q)
+    +(15*e2**2/256+45*e2**3/1024)*Math.sin(4*q)
+    -35*e2**3/3072*Math.sin(6*q));
+  const N=a/Math.sqrt(1-e2*Math.sin(p)**2),T=Math.tan(p)**2;
+  const C=e2/(1-e2)*Math.cos(p)**2,A=Math.cos(p)*l;
+  const xv=m*(Mf(p)-Mf(p0)+N*Math.tan(p)*(A**2/2+(5-T+9*C+4*C**2)*A**4/24));
+  const yv=m*N*(A+(1-T+C)*A**3/6);
+  return{n:s.n,x:xv.toFixed(3),y:yv.toFixed(3)};
+}
+function toPlusCode(lat,lon){
+  const C='23456789CFGHJMPQRVWX';
+  const enc=(v,mx)=>{
+    let s='',r=Math.min(v,mx*2-1e-10)*(20**4/(mx*2));
+    for(let i=0;i<4;i++){s=C[Math.floor(r%20)]+s;r=Math.floor(r/20);}return s;
+  };
+  const lc=enc(lat+90,180),nc=enc(lon+180,360);
+  let c='';for(let i=0;i<4;i++)c+=lc[i]+nc[i];
+  return c.slice(0,4)+'+'+c.slice(4,8);
+}
+function toGeohash(lat,lon,pr=9){
+  const B='0123456789bcdefghjkmnpqrstuvwxyz';
+  let la=-90,ha=90,lo=-180,ho=180,h='',bi=0,bt=0,ie=true;
+  while(h.length<pr){
+    if(ie){const m=(lo+ho)/2;lon>m?(bi=(bi<<1)|1,lo=m):(bi=bi<<1,ho=m);}
+    else{const m=(la+ha)/2;lat>m?(bi=(bi<<1)|1,la=m):(bi=bi<<1,ha=m);}
+    ie=!ie;if(++bt===5){h+=B[bi];bi=0;bt=0;}
+  }return h;
+}
+
+// ──────────────────────────────────────────────
+//  Leaflet 管理
+// ──────────────────────────────────────────────
+const MAPS={}, MARKS={};
+const TILES={
+  osm:{url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',attr:'© OpenStreetMap'},
+  gsi:{url:'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',attr:'© 国土地理院'},
+  sat:{url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',attr:'© Esri'}
+};
+const LF_DEFS=[
+  {id:'lf-dd',   tile:'osm'},{id:'lf-dms',  tile:'gsi'},
+  {id:'lf-ddm',  tile:'sat'},{id:'lf-utm',  tile:'osm'},
+  {id:'lf-mgrs', tile:'gsi'},{id:'lf-jpr',  tile:'gsi'},
+  {id:'lf-ecef', tile:'sat'},{id:'lf-plus', tile:'osm'},
+  {id:'lf-geo',  tile:'osm'}
+];
+
+function initLF(id,tile){
+  if(MAPS[id])return;
+  const el=document.getElementById(id);if(!el)return;
+  const t=TILES[tile];
+  const m=L.map(el,{zoomControl:true});
+  L.tileLayer(t.url,{attribution:t.attr,maxZoom:19}).addTo(m);
+  MAPS[id]=m;
+}
+function moveLF(id,lat,lon,z=15){
+  if(!MAPS[id])return;
+  MAPS[id].setView([lat,lon],z);
+  if(MARKS[id])MARKS[id].setLatLng([lat,lon]);
+  else MARKS[id]=L.marker([lat,lon],{
+    icon:L.divIcon({html:`<div style="width:14px;height:14px;background:#1a6fd4;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>`,
+    iconSize:[14,14],iconAnchor:[7,7],className:''})
+  }).addTo(MAPS[id]);
+}
+
+let curLat=null,curLon=null;
+function syncAll(lat,lon){
+  curLat=lat;curLon=lon;
+  LF_DEFS.forEach(d=>moveLF(d.id,lat,lon));
+  const gs=`https://maps.gsi.go.jp/#15/${lat.toFixed(6)}/${lon.toFixed(6)}/`;
+  const os=`https://www.openstreetmap.org/?mlat=${lat.toFixed(6)}&mlon=${lon.toFixed(6)}&zoom=15`;
+  const gm=`https://maps.google.com/maps?q=${lat.toFixed(6)},${lon.toFixed(6)}&z=15&output=embed`;
+  document.querySelectorAll('[id^="if-"]').forEach(f=>{
+    if(f.id.endsWith('-gs'))f.src=gs;
+    else if(f.id.endsWith('-os'))f.src=os;
+    else if(f.id.endsWith('-gm'))f.src=gm;
+  });
+}
+
+// ──────────────────────────────────────────────
+//  Tab switcher
+// ──────────────────────────────────────────────
+function sw(tabEl,key,type){
+  const card=tabEl.closest('.ccard');
+  card.querySelectorAll('.mtab').forEach(t=>t.classList.remove('act'));
+  tabEl.classList.add('act');
+  card.querySelectorAll('.mlmap,.mif').forEach(f=>f.classList.remove('act'));
+  let target;
+  if(type==='lf') target=card.querySelector('.mlmap');
+  else target=card.querySelector(`[id$="-${type}"]`);
+  if(target){
+    target.classList.add('act');
+    if(target.classList.contains('mlmap')&&curLat!==null){
+      const m=MAPS[target.id];
+      if(m)setTimeout(()=>m.invalidateSize(),80);
+    }
+  }
+}
+
+// ──────────────────────────────────────────────
+//  Geocoding
+// ──────────────────────────────────────────────
+async function geocode(postal,addr){
+  let q=((postal||'').replace('-','')+' '+(addr||'')).trim();
+  if(!q)throw new Error('住所または郵便番号を入力してください');
+  const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&countrycodes=jp&format=json&limit=3`,
+    {headers:{'Accept-Language':'ja','User-Agent':'CoordEx/2.0'}});
+  if(!r.ok)throw new Error('通信エラー: '+r.status);
+  const d=await r.json();
+  if(!d.length)throw new Error('住所が見つかりません。入力を確認してください');
+  return{lat:parseFloat(d[0].lat),lon:parseFloat(d[0].lon),name:d[0].display_name};
+}
+async function revGeo(lat,lon){
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=ja`,
+      {headers:{'User-Agent':'CoordEx/2.0'}});
+    const d=await r.json();return d.display_name||`${lat.toFixed(5)},${lon.toFixed(5)}`;
+  }catch{return `${lat.toFixed(5)}, ${lon.toFixed(5)}`;}
+}
+
+// ──────────────────────────────────────────────
+//  Display
+// ──────────────────────────────────────────────
+function display(lat,lon,name){
+  // Values
+  document.getElementById('vDD').textContent=`緯度 (Lat): ${lat.toFixed(8)}\n経度 (Lon): ${lon.toFixed(8)}`;
+  document.getElementById('vDMS').textContent=`${toDMS(lat,true)}\n${toDMS(lon,false)}`;
+  document.getElementById('vDDM').textContent=`${toDDM(lat,true)}\n${toDDM(lon,false)}`;
+  const utm=toUTM(lat,lon);
+  document.getElementById('vUTM').textContent=`Zone:     ${utm.z}${utm.b}\nEasting:  ${utm.x.toLocaleString()} m\nNorthing: ${utm.y.toLocaleString()} m`;
+
+  const rows=document.getElementById('mgrsRows');rows.innerHTML='';
+  [[5,'1m精度  (10桁)'],[4,'10m精度 (8桁)'],[3,'100m精度(6桁)']].forEach(([p,lb])=>{
+    const v=toMGRS(lat,lon,p);
+    const d=document.createElement('div');d.className='mgrs-row';
+    d.innerHTML=`<span class="mgrs-prec">${lb}</span><span class="mgrs-v">${v}</span><span class="mgrs-cp">コピー</span>`;
+    d.onclick=()=>{
+      navigator.clipboard.writeText(v).catch(()=>{});
+      const c=d.querySelector('.mgrs-cp');c.textContent='✓ コピー済';
+      setTimeout(()=>c.textContent='コピー',1600);
+    };rows.appendChild(d);
+  });
+
+  const jpr=toJPR(lat,lon);
+  document.getElementById('vJPR').textContent=`系番号:  第${jpr.n}系\nX座標:  ${parseFloat(jpr.x).toLocaleString()} m (南北)\nY座標:  ${parseFloat(jpr.y).toLocaleString()} m (東西)`;
+  const ec=toECEF(lat,lon);
+  document.getElementById('vECEF').textContent=`X: ${ec.X.toFixed(3)} m\nY: ${ec.Y.toFixed(3)} m\nZ: ${ec.Z.toFixed(3)} m`;
+  document.getElementById('vPLUS').textContent=`${toPlusCode(lat,lon)}\n精度: 約14m × 14m`;
+  document.getElementById('vGEO').textContent=`9桁: ${toGeohash(lat,lon,9)}\n精度: ±約2.4m`;
+
+  // Banner
+  document.getElementById('locNm').textContent=name.split(',').slice(0,4).join('、');
+  document.getElementById('locBanner').style.display='block';
+
+  // Show results & init maps
+  document.getElementById('results').style.display='block';
+  LF_DEFS.forEach(d=>{if(!MAPS[d.id])initLF(d.id,d.tile);});
+  syncAll(lat,lon);
+  setTimeout(()=>{LF_DEFS.forEach(d=>{if(MAPS[d.id])MAPS[d.id].invalidateSize();});},250);
+  setTimeout(()=>document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'}),320);
+}
+
+// ──────────────────────────────────────────────
+//  Buttons
+// ──────────────────────────────────────────────
+async function doSearch(){
+  const postal=document.getElementById('iPost').value.trim();
+  const addr=document.getElementById('iAddr').value.trim();
+  if(!postal&&!addr){showSt('error','⚠ 郵便番号または住所を入力してください');return;}
+  const btn=document.getElementById('btnS');btn.disabled=true;
+  showSt('loading','住所を検索中...');
+  try{const{lat,lon,name}=await geocode(postal,addr);hideSt();display(lat,lon,name);}
+  catch(e){showSt('error',e.message);}
+  finally{btn.disabled=false;}
+}
+
+let wid=null;
+function doGPS(){
+  if(!navigator.geolocation){showSt('error','Geolocationは利用できません');return;}
+  const btn=document.getElementById('btnG'),lbl=document.getElementById('gpsLbl');
+  if(wid!==null){
+    navigator.geolocation.clearWatch(wid);wid=null;
+    btn.classList.remove('on');lbl.textContent='現在地GPS取得';hideSt();return;
+  }
+  btn.classList.add('on');lbl.textContent='追跡停止';
+  showSt('loading','GPS信号取得中...');
+  wid=navigator.geolocation.watchPosition(
+    async pos=>{
+      const{latitude:lat,longitude:lon,accuracy:acc}=pos.coords;
+      hideSt();
+      const name=await revGeo(lat,lon);
+      display(lat,lon,name+` (精度: ±${acc.toFixed(0)}m)`);
+    },
+    err=>{
+      btn.classList.remove('on');lbl.textContent='現在地GPS取得';wid=null;
+      const m={1:'位置情報の許可が必要です',2:'位置を特定できませんでした',3:'タイムアウト'};
+      showSt('error','⚠ '+(m[err.code]||err.message));
+    },
+    {enableHighAccuracy:true,maximumAge:5000,timeout:15000}
+  );
+}
+
+function cp(id,btn){
+  const t=document.getElementById(id).textContent;
+  navigator.clipboard.writeText(t).then(()=>{
+    btn.textContent='✓ コピー済';btn.classList.add('ok');
+    setTimeout(()=>{btn.textContent='コピー';btn.classList.remove('ok');},1800);
+  }).catch(()=>{const s=window.getSelection(),r=document.createRange();
+    r.selectNodeContents(document.getElementById(id));s.removeAllRanges();s.addRange(r);});
+}
+
+function showSt(type,msg){
+  const el=document.getElementById('status');el.className=type;el.style.display='flex';
+  document.getElementById('stMsg').textContent=msg;
+  el.querySelector('.spin').style.display=type==='loading'?'':'none';
+}
+function hideSt(){document.getElementById('status').style.display='none';}
+
+window.addEventListener('scroll',()=>{
+  document.getElementById('fab').style.display=scrollY>300?'flex':'none';
+});
+document.addEventListener('DOMContentLoaded',()=>{
+  ['iPost','iAddr'].forEach(id=>{
+    document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')doSearch();});
+  });
+  document.getElementById('iPost').addEventListener('input',e=>{
+    let v=e.target.value.replace(/\D/g,'');
+    if(v.length>3)v=v.slice(0,3)+'-'+v.slice(3,7);
+    e.target.value=v;
+  });
+});
+</script>
+</body>
+</html>
